@@ -1,11 +1,21 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { Pool } from 'pg'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const DATABASE_URL = process.env.DATABASE_URL
 
-const DB_PATH = path.join(__dirname, '..', 'db.json')
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL não está configurada!')
+}
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+})
+
+pool.on('error', (err) => {
+  console.error('Erro inesperado no pool:', err)
+})
 
 export interface Cliente {
   id: string
@@ -29,22 +39,10 @@ export interface HistoricoItem {
   dadosNovos?: any
 }
 
-interface DatabaseSchema {
-  clientes: Cliente[]
-  version: string
-}
-
 export class Database {
   private static instance: Database
 
-  private data: DatabaseSchema = {
-    clientes: [],
-    version: '1.0.0'
-  }
-
-  private constructor() {
-    this.load()
-  }
+  private constructor() {}
 
   static getInstance(): Database {
     if (!Database.instance) {
@@ -53,64 +51,235 @@ export class Database {
     return Database.instance
   }
 
-  private load(): void {
+  /**
+   * Inicializar banco de dados (criar tabelas se não existirem)
+   */
+  async initialize(): Promise<void> {
     try {
-      if (fs.existsSync(DB_PATH)) {
-        const fileContent = fs.readFileSync(DB_PATH, 'utf-8')
-        this.data = JSON.parse(fileContent)
-      } else {
-        this.save()
+      const client = await pool.connect()
+      try {
+        console.log('Inicializando banco de dados...')
+
+        // Criar tabela de clientes
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS clientes (
+            id VARCHAR(255) PRIMARY KEY,
+            nome VARCHAR(255) NOT NULL,
+            squad VARCHAR(10) NOT NULL CHECK (squad IN ('BR', 'USA')),
+            servicos TEXT[] NOT NULL,
+            fee NUMERIC NOT NULL,
+            status VARCHAR(20) NOT NULL CHECK (status IN ('Ativo', 'Churn')),
+            data_create TIMESTAMP NOT NULL,
+            data_update TIMESTAMP NOT NULL,
+            historico JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
+
+        // Criar índices
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_clientes_squad 
+          ON clientes(squad)
+        `)
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_clientes_status 
+          ON clientes(status)
+        `)
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_clientes_data_update 
+          ON clientes(data_update DESC)
+        `)
+
+        console.log('✅ Banco de dados inicializado com sucesso!')
+      } finally {
+        client.release()
       }
     } catch (error) {
-      console.error('Erro ao carregar database:', error)
-      this.data = { clientes: [], version: '1.0.0' }
+      console.error('❌ Erro ao inicializar banco de dados:', error)
+      throw error
     }
   }
 
-  private save(): void {
+  /**
+   * Obter todos os clientes
+   */
+  async getAllClientes(): Promise<Cliente[]> {
     try {
-      fs.writeFileSync(DB_PATH, JSON.stringify(this.data, null, 2))
+      const result = await pool.query(
+        'SELECT * FROM clientes ORDER BY data_update DESC'
+      )
+      return this.rowsToClientes(result.rows)
     } catch (error) {
-      console.error('Erro ao salvar database:', error)
+      console.error('Erro ao obter clientes:', error)
+      throw error
     }
   }
 
-  getAllClientes(): Cliente[] {
-    return this.data.clientes
-  }
-
-  getClienteById(id: string): Cliente | undefined {
-    return this.data.clientes.find(c => c.id === id)
-  }
-
-  createCliente(cliente: Cliente): Cliente {
-    this.data.clientes.push(cliente)
-    this.save()
-    return cliente
-  }
-
-  updateCliente(id: string, clienteAtualizado: Cliente): Cliente | undefined {
-    const index = this.data.clientes.findIndex(c => c.id === id)
-    if (index !== -1) {
-      this.data.clientes[index] = clienteAtualizado
-      this.save()
-      return clienteAtualizado
+  /**
+   * Obter cliente por ID
+   */
+  async getClienteById(id: string): Promise<Cliente | undefined> {
+    try {
+      const result = await pool.query(
+        'SELECT * FROM clientes WHERE id = $1',
+        [id]
+      )
+      if (result.rows.length === 0) {
+        return undefined
+      }
+      return this.rowToCliente(result.rows[0])
+    } catch (error) {
+      console.error('Erro ao obter cliente:', error)
+      throw error
     }
-    return undefined
   }
 
-  deleteCliente(id: string): boolean {
-    const index = this.data.clientes.findIndex(c => c.id === id)
-    if (index !== -1) {
-      this.data.clientes.splice(index, 1)
-      this.save()
-      return true
+  /**
+   * Criar novo cliente
+   */
+  async createCliente(cliente: Cliente): Promise<Cliente> {
+    try {
+      const { id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = cliente
+
+      await pool.query(
+        `INSERT INTO clientes (id, nome, squad, servicos, fee, status, data_create, data_update, historico)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, JSON.stringify(historico)]
+      )
+
+      return cliente
+    } catch (error) {
+      console.error('Erro ao criar cliente:', error)
+      throw error
     }
-    return false
   }
 
-  deleteAllClientes(): void {
-    this.data.clientes = []
-    this.save()
+  /**
+   * Atualizar cliente
+   */
+  async updateCliente(id: string, clienteAtualizado: Cliente): Promise<Cliente | undefined> {
+    try {
+      const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = clienteAtualizado
+
+      const result = await pool.query(
+        `UPDATE clientes 
+         SET nome = $2, squad = $3, servicos = $4, fee = $5, status = $6, 
+             data_create = $7, data_update = $8, historico = $9, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+         RETURNING *`,
+        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, JSON.stringify(historico)]
+      )
+
+      if (result.rows.length === 0) {
+        return undefined
+      }
+
+      return this.rowToCliente(result.rows[0])
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Deletar cliente
+   */
+  async deleteCliente(id: string): Promise<boolean> {
+    try {
+      const result = await pool.query(
+        'DELETE FROM clientes WHERE id = $1',
+        [id]
+      )
+      return result.rowCount ? result.rowCount > 0 : false
+    } catch (error) {
+      console.error('Erro ao deletar cliente:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Deletar todos os clientes (usar com cuidado!)
+   */
+  async deleteAllClientes(): Promise<void> {
+    try {
+      await pool.query('DELETE FROM clientes')
+    } catch (error) {
+      console.error('Erro ao deletar todos os clientes:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Contar total de clientes
+   */
+  async countClientes(): Promise<number> {
+    try {
+      const result = await pool.query('SELECT COUNT(*) FROM clientes')
+      return parseInt(result.rows[0].count, 10)
+    } catch (error) {
+      console.error('Erro ao contar clientes:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Testar conexão com banco de dados
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      const client = await pool.connect()
+      try {
+        await client.query('SELECT NOW()')
+        console.log('✅ Conexão com banco de dados estabelecida!')
+        return true
+      } finally {
+        client.release()
+      }
+    } catch (error) {
+      console.error('❌ Erro ao conectar ao banco de dados:', error)
+      return false
+    }
+  }
+
+  /**
+   * Fechar pool de conexões (ao desligar o servidor)
+   */
+  async close(): Promise<void> {
+    try {
+      await pool.end()
+      console.log('Pool de conexões fechado')
+    } catch (error) {
+      console.error('Erro ao fechar pool:', error)
+    }
+  }
+
+  // ==================== HELPERS ====================
+
+  private rowToCliente(row: any): Cliente {
+    return {
+      id: row.id,
+      nome: row.nome,
+      squad: row.squad,
+      servicos: row.servicos,
+      fee: parseFloat(row.fee),
+      status: row.status,
+      dataCreate: row.data_create,
+      dataUpdate: row.data_update,
+      historico: typeof row.historico === 'string' ? JSON.parse(row.historico) : row.historico
+    }
+  }
+
+  private rowsToClientes(rows: any[]): Cliente[] {
+    return rows.map(row => this.rowToCliente(row))
+  }
+
+  /**
+   * Exportar pool para testes/queries customizadas
+   */
+  getPool(): Pool {
+    return pool
   }
 }
