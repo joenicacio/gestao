@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Cliente } from '../types'
-import { DashboardManager } from '../utils/DashboardManager'
+import { DashboardManager, DateRangeFilter } from '../utils/DashboardManager'
 import { MetasChurn } from './MetasChurn'
 import { CardMRR } from './CardMRR'
 import { GraficoChurn } from './GraficoChurn'
@@ -13,10 +13,23 @@ interface DashboardProps {
 export function Dashboard({ clientes }: DashboardProps) {
   const [metaChurn, setMetaChurn] = useState<number>(DashboardManager.obterMetaChurn())
   const [squadFilter, setSquadFilter] = useState<'BR' | 'USA' | 'TODOS'>('TODOS')
+  const [dataInicio, setDataInicio] = useState<string>('')
+  const [dataFim, setDataFim] = useState<string>('')
+
+  // Criar DateRangeFilter baseado nos valores de entrada
+  const dateRange: DateRangeFilter = useMemo(() => ({
+    dataInicio: dataInicio ? new Date(dataInicio) : undefined,
+    dataFim: dataFim ? new Date(dataFim) : undefined
+  }), [dataInicio, dataFim])
+
+  const handleResetarFiltro = () => {
+    setDataInicio('')
+    setDataFim('')
+  }
 
   const mrrData = useMemo(() => DashboardManager.calcularMRR(clientes, squadFilter), [clientes, squadFilter])
-  const churnMensal = useMemo(() => DashboardManager.calcularChurnMensal(clientes, squadFilter), [clientes, squadFilter])
-  const feeMensal = useMemo(() => DashboardManager.calcularFeeMensal(clientes, squadFilter), [clientes, squadFilter])
+  const churnMensal = useMemo(() => DashboardManager.calcularChurnMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
+  const feeMensal = useMemo(() => DashboardManager.calcularFeeMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
 
   const handleSalvarMeta = (novaMeta: number) => {
     setMetaChurn(novaMeta)
@@ -40,28 +53,64 @@ export function Dashboard({ clientes }: DashboardProps) {
         <p>Visão geral das métricas e performance da agência</p>
       </div>
 
-      {/* Filtro de Squad */}
-      <div className="dashboard-filtro">
-        <span className="filtro-label">Filtrar por Squad:</span>
-        <div className="filtro-botoes">
-          <button
-            className={`btn-filtro ${squadFilter === 'TODOS' ? 'ativo' : ''}`}
-            onClick={() => setSquadFilter('TODOS')}
-          >
-            Todos os Clientes
-          </button>
-          <button
-            className={`btn-filtro ${squadFilter === 'BR' ? 'ativo' : ''}`}
-            onClick={() => setSquadFilter('BR')}
-          >
-            Squad BR
-          </button>
-          <button
-            className={`btn-filtro ${squadFilter === 'USA' ? 'ativo' : ''}`}
-            onClick={() => setSquadFilter('USA')}
-          >
-            Squad USA
-          </button>
+      {/* Filtros */}
+      <div className="dashboard-filtros">
+        {/* Filtro de Squad */}
+        <div className="dashboard-filtro">
+          <span className="filtro-label">Filtrar por Squad:</span>
+          <div className="filtro-botoes">
+            <button
+              className={`btn-filtro ${squadFilter === 'TODOS' ? 'ativo' : ''}`}
+              onClick={() => setSquadFilter('TODOS')}
+            >
+              Todos os Clientes
+            </button>
+            <button
+              className={`btn-filtro ${squadFilter === 'BR' ? 'ativo' : ''}`}
+              onClick={() => setSquadFilter('BR')}
+            >
+              Squad BR
+            </button>
+            <button
+              className={`btn-filtro ${squadFilter === 'USA' ? 'ativo' : ''}`}
+              onClick={() => setSquadFilter('USA')}
+            >
+              Squad USA
+            </button>
+          </div>
+        </div>
+
+        {/* Filtro de Data */}
+        <div className="dashboard-filtro-data">
+          <span className="filtro-label">Filtrar por Período:</span>
+          <div className="filtro-data-inputs">
+            <div className="input-group">
+              <label htmlFor="data-inicio">Data Inicial:</label>
+              <input
+                id="data-inicio"
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="data-fim">Data Final:</label>
+              <input
+                id="data-fim"
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+              />
+            </div>
+            {(dataInicio || dataFim) && (
+              <button 
+                className="btn-resetar-filtro"
+                onClick={handleResetarFiltro}
+              >
+                Limpar Filtro
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
