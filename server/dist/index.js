@@ -30,9 +30,9 @@ app.use((req, res, next) => {
 });
 // ==================== ROUTES ====================
 // GET /api/clientes - Obter todos os clientes
-app.get('/api/clientes', (req, res) => {
+app.get('/api/clientes', async (req, res) => {
     try {
-        const clientes = db.getAllClientes();
+        const clientes = await db.getAllClientes();
         res.json({ success: true, data: clientes });
     }
     catch (error) {
@@ -41,10 +41,10 @@ app.get('/api/clientes', (req, res) => {
     }
 });
 // GET /api/clientes/:id - Obter um cliente específico
-app.get('/api/clientes/:id', (req, res) => {
+app.get('/api/clientes/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const cliente = db.getClienteById(id);
+        const cliente = await db.getClienteById(id);
         if (!cliente) {
             return res.status(404).json({ success: false, error: 'Cliente não encontrado' });
         }
@@ -56,7 +56,7 @@ app.get('/api/clientes/:id', (req, res) => {
     }
 });
 // POST /api/clientes - Criar novo cliente
-app.post('/api/clientes', (req, res) => {
+app.post('/api/clientes', async (req, res) => {
     try {
         const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = req.body;
         if (!nome || !squad || !servicos || fee === undefined || !status) {
@@ -76,7 +76,7 @@ app.post('/api/clientes', (req, res) => {
             dataUpdate,
             historico
         };
-        const clienteCriado = db.createCliente(novoCliente);
+        const clienteCriado = await db.createCliente(novoCliente);
         // Notificar todos os clientes conectados sobre a novo cliente
         io.emit('cliente:created', clienteCriado);
         res.status(201).json({ success: true, data: clienteCriado });
@@ -87,14 +87,15 @@ app.post('/api/clientes', (req, res) => {
     }
 });
 // PUT /api/clientes/:id - Atualizar cliente
-app.put('/api/clientes/:id', (req, res) => {
+app.put('/api/clientes/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const clienteAtualizado = req.body;
-        if (!db.getClienteById(id)) {
+        const clienteExistente = await db.getClienteById(id);
+        if (!clienteExistente) {
             return res.status(404).json({ success: false, error: 'Cliente não encontrado' });
         }
-        const atualizado = db.updateCliente(id, clienteAtualizado);
+        const atualizado = await db.updateCliente(id, clienteAtualizado);
         // Notificar todos os clientes conectados sobre a atualização
         io.emit('cliente:updated', atualizado);
         res.json({ success: true, data: atualizado });
@@ -105,13 +106,14 @@ app.put('/api/clientes/:id', (req, res) => {
     }
 });
 // DELETE /api/clientes/:id - Deletar cliente
-app.delete('/api/clientes/:id', (req, res) => {
+app.delete('/api/clientes/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        if (!db.getClienteById(id)) {
+        const clienteExistente = await db.getClienteById(id);
+        if (!clienteExistente) {
             return res.status(404).json({ success: false, error: 'Cliente não encontrado' });
         }
-        db.deleteCliente(id);
+        await db.deleteCliente(id);
         // Notificar todos os clientes conectados sobre a exclusão
         io.emit('cliente:deleted', { id });
         res.json({ success: true, message: 'Cliente deletado com sucesso' });
@@ -122,7 +124,7 @@ app.delete('/api/clientes/:id', (req, res) => {
     }
 });
 // POST /api/clientes/batch/sync - Sincronizar múltiplos clientes (importação/atualização)
-app.post('/api/clientes/batch/sync', (req, res) => {
+app.post('/api/clientes/batch/sync', async (req, res) => {
     try {
         const { clientes } = req.body;
         if (!Array.isArray(clientes)) {
@@ -135,14 +137,14 @@ app.post('/api/clientes/batch/sync', (req, res) => {
         for (const cliente of clientes) {
             if (cliente.id) {
                 // Atualizar cliente existente
-                const atualizado = db.updateCliente(cliente.id, cliente);
+                const atualizado = await db.updateCliente(cliente.id, cliente);
                 if (atualizado) {
                     clientesSincronizados.push(atualizado);
                 }
             }
             else {
                 // Criar novo cliente
-                const criado = db.createCliente({
+                const criado = await db.createCliente({
                     ...cliente,
                     id: `cli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
                 });
@@ -173,10 +175,34 @@ io.on('connection', (socket) => {
     });
 });
 // Iniciar servidor HTTP (que suporta WebSocket)
-httpServer.listen(PORT, () => {
-    console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
-    console.log(`🔗 CORS habilitado para: ${CORS_ORIGIN}`);
-    console.log(`📁 Database: ${process.cwd()}/db.json`);
-    console.log(`🔌 WebSocket (Socket.io) habilitado`);
-});
+async function startServer() {
+    try {
+        // Testar conexão e inicializar banco de dados
+        const connected = await db.testConnection();
+        if (!connected) {
+            throw new Error('Falha ao conectar ao banco de dados');
+        }
+        await db.initialize();
+        httpServer.listen(PORT, () => {
+            console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
+            console.log(`🔗 CORS habilitado para: ${CORS_ORIGIN}`);
+            console.log(`🗄️  Database: PostgreSQL Neon`);
+            console.log(`🔌 WebSocket (Socket.io) habilitado`);
+        });
+        // Graceful shutdown
+        process.on('SIGINT', async () => {
+            console.log('Encerrando servidor...');
+            await db.close();
+            httpServer.close(() => {
+                console.log('Servidor encerrado');
+                process.exit(0);
+            });
+        });
+    }
+    catch (error) {
+        console.error('❌ Erro ao iniciar servidor:', error);
+        process.exit(1);
+    }
+}
+startServer();
 //# sourceMappingURL=index.js.map

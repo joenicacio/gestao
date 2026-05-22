@@ -23,6 +23,7 @@ export type TipoHistorico =
   | 'status_alterado'
   | 'data_inicio_alterada'
   | 'data_churn_alterada'
+  | 'motivo_churn_adicionado'
 
 export interface HistoricoItem {
   id: string
@@ -32,6 +33,12 @@ export interface HistoricoItem {
   descricao: string
   dadosAntigos?: any
   dadosNovos?: any
+}
+
+export interface MotivoChurn {
+  motivoPrincipal: string
+  submotivo: string
+  porques: [string, string, string, string, string] // Array com 5 strings
 }
 
 export interface Cliente {
@@ -45,6 +52,7 @@ export interface Cliente {
   dataUpdate: string
   dataInicio?: string
   dataChurn?: string
+  motivoChurn?: MotivoChurn
   tempoContrato?: number
   historico: HistoricoItem[]
   ultimoFee?: number

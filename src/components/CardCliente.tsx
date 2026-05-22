@@ -3,6 +3,7 @@ import { Cliente } from '../types'
 import { ClienteManager } from '../utils/ClienteManager'
 import { HistoricoCliente } from './HistoricoCliente'
 import { EditarServicosModal } from './EditarServicosModal'
+import { EditarMotivosChurnModal } from './EditarMotivosChurnModal'
 
 interface CardClienteProps {
   cliente: Cliente
@@ -13,6 +14,7 @@ interface CardClienteProps {
 export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
   const [showHistorico, setShowHistorico] = useState(false)
   const [showEditarServicos, setShowEditarServicos] = useState(false)
+  const [showEditarChurn, setShowEditarChurn] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editFee, setEditFee] = useState(cliente.fee.toString())
 
@@ -81,6 +83,15 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
             >
               ✏️
             </button>
+            {isChurn && (
+              <button
+                className="btn-icon"
+                onClick={() => setShowEditarChurn(true)}
+                title="Editar motivos de churn"
+              >
+                📋
+              </button>
+            )}
             <button
               className="btn-icon"
               onClick={() => setShowHistorico(true)}
@@ -187,6 +198,14 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
         <EditarServicosModal
           cliente={cliente}
           onClose={() => setShowEditarServicos(false)}
+          onUpdate={onUpdate}
+        />
+      )}
+
+      {showEditarChurn && (
+        <EditarMotivosChurnModal
+          cliente={cliente}
+          onClose={() => setShowEditarChurn(false)}
           onUpdate={onUpdate}
         />
       )}

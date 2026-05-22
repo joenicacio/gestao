@@ -206,14 +206,18 @@ export class DashboardManager {
     // Se tem dataInicio (data de início do contrato), usar isso
     if (cliente.dataInicio) {
       const dataInicio = new Date(cliente.dataInicio)
-      // Cliente só conta se iniciou antes ou durante este mês
+      // Cliente SÓ conta a partir do mês em que iniciou
       if (dataInicio > fimDaMes) {
         return false // Contrato iniciou depois deste mês
+      }
+      // Verificar se o cliente foi criado após este mês
+      if (dataInicio > fimDaMes) {
+        return false
       }
     } else {
       // Se não tem dataInicio, usar dataCreate
       const dataCriacao = new Date(cliente.dataCreate)
-      // Cliente só conta se foi criado antes ou durante este mês
+      // Cliente só conta a partir do mês em que foi criado
       if (dataCriacao > fimDaMes) {
         return false // Cliente criado após este mês
       }
@@ -222,7 +226,8 @@ export class DashboardManager {
     // Se tem dataChurn (data de término do contrato), verificar se já tinha churned
     if (cliente.dataChurn) {
       const dataChurn = new Date(cliente.dataChurn)
-      // Cliente não conta se churned antes deste mês
+      // Cliente não conta se churned ANTES deste mês
+      // Ou seja: só conta se fez churn durante o mês ou depois
       if (dataChurn < inicioDaMes) {
         return false // Churned antes deste mês
       }
