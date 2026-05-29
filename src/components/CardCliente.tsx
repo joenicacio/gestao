@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Cliente } from '../types'
 import { ClienteManager } from '../utils/ClienteManager'
+import { useCardNeonGlow } from '../utils/NeonEffects'
 import { HistoricoCliente } from './HistoricoCliente'
 import { EditarServicosModal } from './EditarServicosModal'
 import { EditarMotivosChurnModal } from './EditarMotivosChurnModal'
+import { EditarDataInicioModal } from './EditarDataInicioModal'
 
 interface CardClienteProps {
   cliente: Cliente
@@ -12,11 +14,15 @@ interface CardClienteProps {
 }
 
 export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
   const [showHistorico, setShowHistorico] = useState(false)
   const [showEditarServicos, setShowEditarServicos] = useState(false)
   const [showEditarChurn, setShowEditarChurn] = useState(false)
+  const [showEditarData, setShowEditarData] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editFee, setEditFee] = useState(cliente.fee.toString())
+
+  useCardNeonGlow(cardRef)
 
   const handleDeleteClick = () => {
     if (confirm(`Tem certeza que deseja remover o cliente "${cliente.nome}"?`)) {
@@ -61,7 +67,7 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
 
   return (
     <>
-      <div className={`card-cliente ${isChurn ? 'cliente-churn' : ''}`}>
+      <div className={`card-cliente ${isChurn ? 'cliente-churn' : ''}`} ref={cardRef}>
         <div className="card-header">
           <div className="cliente-info">
             <h3 className="cliente-nome">{cliente.nome}</h3>
@@ -76,6 +82,13 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
             <span className="badge squad-badge">Squad: {cliente.squad}</span>
           </div>
           <div className="card-actions">
+            <button
+              className="btn-icon"
+              onClick={() => setShowEditarData(true)}
+              title="Editar data de início"
+            >
+              📅
+            </button>
             <button
               className="btn-icon"
               onClick={() => setShowEditarServicos(true)}
@@ -181,9 +194,15 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
         </div>
 
         <div className="card-footer">
-          <small>
-            Criado em: {new Date(cliente.dataCreate).toLocaleDateString('pt-BR')}
-          </small>
+          <div className="footer-info">
+            <small>Criado em: {new Date(cliente.dataCreate).toLocaleDateString('pt-BR')}</small>
+            {cliente.dataInicio && (
+              <small>Contrato iniciado em: {new Date(cliente.dataInicio).toLocaleDateString('pt-BR')}</small>
+            )}
+            {cliente.dataChurn && (
+              <small>Churnou em: {new Date(cliente.dataChurn).toLocaleDateString('pt-BR')}</small>
+            )}
+          </div>
         </div>
       </div>
 
@@ -206,6 +225,14 @@ export function CardCliente({ cliente, onDelete, onUpdate }: CardClienteProps) {
         <EditarMotivosChurnModal
           cliente={cliente}
           onClose={() => setShowEditarChurn(false)}
+          onUpdate={onUpdate}
+        />
+      )}
+
+      {showEditarData && (
+        <EditarDataInicioModal
+          cliente={cliente}
+          onClose={() => setShowEditarData(false)}
           onUpdate={onUpdate}
         />
       )}
