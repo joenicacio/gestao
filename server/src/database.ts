@@ -26,6 +26,8 @@ export interface Cliente {
   status: 'Ativo' | 'Churn'
   dataCreate: string
   dataUpdate: string
+  dataInicio?: string
+  dataChurn?: string
   historico: HistoricoItem[]
 }
 
@@ -71,6 +73,8 @@ export class Database {
             status VARCHAR(20) NOT NULL CHECK (status IN ('Ativo', 'Churn')),
             data_create TIMESTAMP NOT NULL,
             data_update TIMESTAMP NOT NULL,
+            data_inicio TIMESTAMP NULL,
+            data_churn TIMESTAMP NULL,
             historico JSONB NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -142,12 +146,12 @@ export class Database {
    */
   async createCliente(cliente: Cliente): Promise<Cliente> {
     try {
-      const { id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = cliente
+      const { id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio, dataChurn, historico } = cliente
 
       await pool.query(
-        `INSERT INTO clientes (id, nome, squad, servicos, fee, status, data_create, data_update, historico)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, JSON.stringify(historico)]
+        `INSERT INTO clientes (id, nome, squad, servicos, fee, status, data_create, data_update, data_inicio, data_churn, historico)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio || null, dataChurn || null, JSON.stringify(historico)]
       )
 
       return cliente
@@ -162,15 +166,15 @@ export class Database {
    */
   async updateCliente(id: string, clienteAtualizado: Cliente): Promise<Cliente | undefined> {
     try {
-      const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = clienteAtualizado
+      const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio, dataChurn, historico } = clienteAtualizado
 
       const result = await pool.query(
         `UPDATE clientes 
          SET nome = $2, squad = $3, servicos = $4, fee = $5, status = $6, 
-             data_create = $7, data_update = $8, historico = $9, updated_at = CURRENT_TIMESTAMP
+             data_create = $7, data_update = $8, data_inicio = $9, data_churn = $10, historico = $11, updated_at = CURRENT_TIMESTAMP
          WHERE id = $1
          RETURNING *`,
-        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, JSON.stringify(historico)]
+        [id, nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio || null, dataChurn || null, JSON.stringify(historico)]
       )
 
       if (result.rows.length === 0) {
@@ -268,6 +272,8 @@ export class Database {
       status: row.status,
       dataCreate: row.data_create,
       dataUpdate: row.data_update,
+      dataInicio: row.data_inicio ? row.data_inicio.toISOString() : undefined,
+      dataChurn: row.data_churn ? row.data_churn.toISOString() : undefined,
       historico: typeof row.historico === 'string' ? JSON.parse(row.historico) : row.historico
     }
   }

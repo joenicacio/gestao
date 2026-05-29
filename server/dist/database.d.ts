@@ -8,6 +8,8 @@ export interface Cliente {
     status: 'Ativo' | 'Churn';
     dataCreate: string;
     dataUpdate: string;
+    dataInicio?: string;
+    dataChurn?: string;
     historico: HistoricoItem[];
 }
 export interface HistoricoItem {

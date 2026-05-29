@@ -65,7 +65,7 @@ app.get('/api/clientes/:id', async (req: Request, res: Response) => {
 // POST /api/clientes - Criar novo cliente
 app.post('/api/clientes', async (req: Request, res: Response) => {
   try {
-    const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, historico } = req.body
+    const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio, dataChurn, historico } = req.body
 
     if (!nome || !squad || !servicos || fee === undefined || !status) {
       return res.status(400).json({
@@ -83,6 +83,8 @@ app.post('/api/clientes', async (req: Request, res: Response) => {
       status,
       dataCreate,
       dataUpdate,
+      dataInicio,
+      dataChurn,
       historico
     }
 
