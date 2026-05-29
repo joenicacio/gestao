@@ -187,61 +187,56 @@ export class DashboardManager {
     return meses
   }
 
-  /**
-   * Verifica se um cliente estava ativo em um determinado mês
-   * Considera dataInicio e dataChurn se disponíveis
-   */
-  private static clienteEstavaAtivoNoMes(cliente: Cliente, mesFormatado: string): boolean {
-    // Parsear o mês formatado (ex: "dez/25" → December 2025)
+  private static parseMesFormatado(mesFormatado: string): { inicioDaMes: Date; fimDaMes: Date } {
     const [mesStr, anoStr] = mesFormatado.split('/')
     const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
     const mesNum = meses.indexOf(mesStr.toLowerCase())
-    const ano = parseInt('20' + anoStr)
+    const ano = parseInt('20' + anoStr, 10)
 
-    // Data do primeiro dia do mês
-    const inicioDaMes = new Date(ano, mesNum, 1)
-    // Data do último dia do mês
-    const fimDaMes = new Date(ano, mesNum + 1, 0, 23, 59, 59)
+    const inicioDaMes = new Date(ano, mesNum, 1, 0, 0, 0, 0)
+    const fimDaMes = new Date(ano, mesNum + 1, 0, 23, 59, 59, 999)
 
-    // Se tem dataInicio (data de início do contrato), usar isso
-    if (cliente.dataInicio) {
-      const dataInicio = new Date(cliente.dataInicio)
-      // Cliente SÓ conta a partir do mês em que iniciou
-      if (dataInicio > fimDaMes) {
-        return false // Contrato iniciou depois deste mês
-      }
-      // Verificar se o cliente foi criado após este mês
-      if (dataInicio > fimDaMes) {
-        return false
-      }
-    } else {
-      // Se não tem dataInicio, usar dataCreate
-      const dataCriacao = new Date(cliente.dataCreate)
-      // Cliente só conta a partir do mês em que foi criado
-      if (dataCriacao > fimDaMes) {
-        return false // Cliente criado após este mês
-      }
+    return { inicioDaMes, fimDaMes }
+  }
+
+  private static getDataInicioContrato(cliente: Cliente): Date {
+    return cliente.dataInicio ? new Date(cliente.dataInicio) : new Date(cliente.dataCreate)
+  }
+
+  private static clienteEstavaAtivoNoMes(cliente: Cliente, mesFormatado: string): boolean {
+    const { inicioDaMes, fimDaMes } = this.parseMesFormatado(mesFormatado)
+    const dataInicio = this.getDataInicioContrato(cliente)
+
+    if (dataInicio > fimDaMes) {
+      return false
     }
 
-    // Se tem dataChurn (data de término do contrato), verificar se já tinha churned
     if (cliente.dataChurn) {
       const dataChurn = new Date(cliente.dataChurn)
-      // Cliente não conta se churned ANTES deste mês
-      // Ou seja: só conta se fez churn durante o mês ou depois
       if (dataChurn < inicioDaMes) {
-        return false // Churned antes deste mês
+        return false
       }
     }
 
     return true
   }
 
+  private static clienteChurnNoMes(cliente: Cliente, mesFormatado: string): boolean {
+    if (!cliente.dataChurn) {
+      return false
+    }
+
+    const { inicioDaMes, fimDaMes } = this.parseMesFormatado(mesFormatado)
+    const dataChurn = new Date(cliente.dataChurn)
+
+    return dataChurn >= inicioDaMes && dataChurn <= fimDaMes
+  }
+
   private static isSameMes(data1: Date, mesFormatado: string): boolean {
-    // Função mantida para compatibilidade, mas agora usa a nova lógica
     const [mesStr, anoStr] = mesFormatado.split('/')
     const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
     const mesNum = meses.indexOf(mesStr.toLowerCase())
-    const ano = parseInt('20' + anoStr)
+    const ano = parseInt('20' + anoStr, 10)
     
     return data1.getMonth() === mesNum && data1.getFullYear() === ano
   }
@@ -264,7 +259,6 @@ export class DashboardManager {
     
     return meses.map(mes => {
       const clientesAtivos = clientesFiltrados.filter(cliente => 
-        cliente.status === 'Ativo' && 
         this.clienteEstavaAtivoNoMes(cliente, mes)
       )
 
@@ -294,12 +288,16 @@ export class DashboardManager {
       : this.getUltimosMeses(6)
     
     return meses.map(mes => {
-      const clientesMes = clientesFiltrados.filter(cliente => {
-        return this.clienteEstavaAtivoNoMes(cliente, mes)
-      })
+      const clientesAtivosNoMes = clientesFiltrados.filter(cliente => 
+        this.clienteEstavaAtivoNoMes(cliente, mes)
+      )
 
-      const churnCount = clientesMes.filter(c => c.status === 'Churn').length
-      const ativoCount = clientesMes.filter(c => c.status === 'Ativo').length
+      const churnCount = clientesFiltrados.filter(cliente => 
+        this.clienteChurnNoMes(cliente, mes)
+      ).length
+      const ativoCount = clientesAtivosNoMes.filter(cliente => 
+        !this.clienteChurnNoMes(cliente, mes)
+      ).length
 
       return {
         mes,

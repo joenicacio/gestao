@@ -27,8 +27,8 @@ export function GraficoChurn({ data, meta }: GraficoChurnProps) {
             <YAxis />
             <Tooltip />
             <Legend />
-            <Bar dataKey="churn" fill="#ef4444" name="Churn" />
-            <Bar dataKey="ativo" fill="#10b981" name="Ativos" />
+            <Bar dataKey="ativo" stackId="status" fill="#10b981" name="Ativos" />
+            <Bar dataKey="churn" stackId="status" fill="#ef4444" name="Churn" />
           </BarChart>
         </ResponsiveContainer>
       </div>
