@@ -96,7 +96,9 @@ function App() {
         dados.squad,
         dados.servicos,
         dados.fee,
-        dados.status
+        dados.status,
+        dados.dataInicio,
+        dados.dataChurn
       )
       
       // Enviar para o servidor (isso dispara o WebSocket)
@@ -115,7 +117,9 @@ function App() {
         dados.squad,
         dados.servicos,
         dados.fee,
-        dados.status
+        dados.status,
+        dados.dataInicio,
+        dados.dataChurn
       )
       setClientes([...clientes, novoCliente])
       setShowFormulario(false)

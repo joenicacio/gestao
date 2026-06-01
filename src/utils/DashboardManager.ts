@@ -111,6 +111,124 @@ export class DashboardManager {
     }
   }
 
+  static calcularMRRPersonalizado(
+    clientes: Cliente[],
+    squad?: 'BR' | 'USA' | 'TODOS',
+    dateRange?: DateRangeFilter
+  ): MRRData {
+    let clientesFiltrados = squad && squad !== 'TODOS'
+      ? clientes.filter(c => c.squad === squad)
+      : clientes
+
+    if (!dateRange?.dataInicio && !dateRange?.dataFim) {
+      return this.calcularMRR(clientesFiltrados)
+    }
+
+    const meses = this.getMesesPersonalizados(dateRange?.dataInicio, dateRange?.dataFim)
+    const ultimoMes = meses[meses.length - 1]
+
+    const clientesAtivosNoUltimoMes = clientesFiltrados.filter(cliente =>
+      this.clienteEstavaAtivoNoMes(cliente, ultimoMes) &&
+      !this.clienteChurnNoMes(cliente, ultimoMes)
+    )
+
+    const mrrTotal = clientesAtivosNoUltimoMes.reduce((sum, cliente) => sum + cliente.fee, 0)
+    const mediaPorCliente = clientesAtivosNoUltimoMes.length > 0
+      ? mrrTotal / clientesAtivosNoUltimoMes.length
+      : 0
+
+    const porServico: Record<ServicoType, number> = {
+      'SEO BRASIL': 0,
+      'SEO EUA': 0,
+      'CRM': 0,
+      'ASSESSORIA': 0,
+      'TRÁFEGO PAGO E-COMMERCE BRASIL': 0,
+      'TRÁFEGO PAGO LEADS BRASIL': 0,
+      'TRÁFEGO PAGO LEADS USA': 0,
+      'TRÁFEGO PAGO E-COMMERCE USA': 0,
+      'SOCIAL MÍDIA': 0,
+      'WAYSALES': 0,
+      'IA': 0
+    }
+    const clientesPorServico: Record<ServicoType, number> = {
+      'SEO BRASIL': 0,
+      'SEO EUA': 0,
+      'CRM': 0,
+      'ASSESSORIA': 0,
+      'TRÁFEGO PAGO E-COMMERCE BRASIL': 0,
+      'TRÁFEGO PAGO LEADS BRASIL': 0,
+      'TRÁFEGO PAGO LEADS USA': 0,
+      'TRÁFEGO PAGO E-COMMERCE USA': 0,
+      'SOCIAL MÍDIA': 0,
+      'WAYSALES': 0,
+      'IA': 0
+    }
+
+    clientesAtivosNoUltimoMes.forEach(cliente => {
+      cliente.servicos.forEach(servico => {
+        porServico[servico] += cliente.fee
+        clientesPorServico[servico] += 1
+      })
+    })
+
+    const seoGeral = porServico['SEO BRASIL'] + porServico['SEO EUA']
+    const seoBrasil = porServico['SEO BRASIL']
+    const seoUsa = porServico['SEO EUA']
+    const trafegoPagoBrasil = porServico['TRÁFEGO PAGO E-COMMERCE BRASIL'] + porServico['TRÁFEGO PAGO LEADS BRASIL']
+    const trafegoPagoUsa = porServico['TRÁFEGO PAGO E-COMMERCE USA'] + porServico['TRÁFEGO PAGO LEADS USA']
+    const trafegoPago = trafegoPagoBrasil + trafegoPagoUsa
+
+    return {
+      total: mrrTotal,
+      mediaPorCliente,
+      porServico,
+      porCategoria: {
+        seoGeral,
+        seoBrasil,
+        seoUsa,
+        trafegoPago,
+        trafegoPagoBrasil,
+        trafegoPagoUsaE: porServico['TRÁFEGO PAGO E-COMMERCE USA'],
+        trafegoPagoUsaL: porServico['TRÁFEGO PAGO LEADS USA'],
+        trafegoPagoBrasilE: porServico['TRÁFEGO PAGO E-COMMERCE BRASIL'],
+        trafegoPagoBrasilL: porServico['TRÁFEGO PAGO LEADS BRASIL'],
+        crm: porServico['CRM'],
+        assessoria: porServico['ASSESSORIA'],
+        socialMedia: porServico['SOCIAL MÍDIA'],
+        ia: porServico['IA'],
+        waysales: porServico['WAYSALES']
+      },
+      clientesPorServico
+    }
+  }
+
+  static contaClientesAtivosNoPeriodo(clientes: Cliente[], dateRange?: DateRangeFilter): number {
+    if (!dateRange?.dataInicio && !dateRange?.dataFim) {
+      return clientes.filter(c => c.status === 'Ativo').length
+    }
+    const meses = this.getMesesPersonalizados(dateRange?.dataInicio, dateRange?.dataFim)
+    return clientes.filter(cliente =>
+      meses.some(mes => this.clienteEstavaAtivoNoMes(cliente, mes) && !this.clienteChurnNoMes(cliente, mes))
+    ).length
+  }
+
+  static contaClientesChurnNoPeriodo(clientes: Cliente[], dateRange?: DateRangeFilter): number {
+    if (!dateRange?.dataInicio && !dateRange?.dataFim) {
+      return clientes.filter(c => c.status === 'Churn').length
+    }
+    const meses = this.getMesesPersonalizados(dateRange?.dataInicio, dateRange?.dataFim)
+    return clientes.filter(cliente => meses.some(mes => this.clienteChurnNoMes(cliente, mes))).length
+  }
+
+  static clienteAtivoNoPeriodo(cliente: Cliente, dateRange?: DateRangeFilter): boolean {
+    if (!dateRange?.dataInicio && !dateRange?.dataFim) {
+      return cliente.status === 'Ativo'
+    }
+
+    const meses = this.getMesesPersonalizados(dateRange?.dataInicio, dateRange?.dataFim)
+    return meses.some(mes => this.clienteEstavaAtivoNoMes(cliente, mes) && !this.clienteChurnNoMes(cliente, mes))
+  }
+
   static calcularChurnMensal(clientes: Cliente[], squad?: 'BR' | 'USA' | 'TODOS', dataInicio?: Date, dataFim?: Date): { mes: string; churn: number; ativo: number }[] {
     // Filtrar clientes por squad se especificado
     let clientesFiltrados = squad && squad !== 'TODOS' 

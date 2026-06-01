@@ -30,6 +30,7 @@ export function Dashboard({ clientes }: DashboardProps) {
   const mrrData = useMemo(() => DashboardManager.calcularMRR(clientes, squadFilter), [clientes, squadFilter])
   const churnMensal = useMemo(() => DashboardManager.calcularChurnMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
   const feeMensal = useMemo(() => DashboardManager.calcularFeeMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
+  const mrrDataPersonalizado = useMemo(() => DashboardManager.calcularMRRPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
 
   const handleSalvarMeta = (novaMeta: number) => {
     setMetaChurn(novaMeta)
@@ -41,9 +42,9 @@ export function Dashboard({ clientes }: DashboardProps) {
     ? clientes 
     : clientes.filter(c => c.squad === squadFilter)
 
-  const clientesAtivos = clientesFiltrados.filter(c => c.status === 'Ativo').length
-  const clientesChurn = clientesFiltrados.filter(c => c.status === 'Churn').length
-  const totalClientes = clientesFiltrados.length
+  const clientesAtivos = DashboardManager.contaClientesAtivosNoPeriodo(clientesFiltrados, dateRange)
+  const clientesChurn = DashboardManager.contaClientesChurnNoPeriodo(clientesFiltrados, dateRange)
+  const totalClientes = (dateRange?.dataInicio || dateRange?.dataFim) ? (clientesAtivos + clientesChurn) : clientesFiltrados.length
   const taxaChurn = totalClientes > 0 ? (clientesChurn / totalClientes) * 100 : 0
 
   return (
@@ -141,14 +142,14 @@ export function Dashboard({ clientes }: DashboardProps) {
       <div className="mrr-principal">
         <CardMRR
           titulo="MRR Total"
-          valor={mrrData.total}
+          valor={mrrDataPersonalizado.total}
           subtitulo={`${mrrData.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
           destaque
         />
         <CardMRR
           titulo="MRR Médio por Cliente"
-          valor={mrrData.mediaPorCliente}
-          subtitulo={`${mrrData.mediaPorCliente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+          valor={mrrDataPersonalizado.mediaPorCliente}
+          subtitulo={`${mrrDataPersonalizado.mediaPorCliente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
         />
       </div>
 
@@ -164,43 +165,43 @@ export function Dashboard({ clientes }: DashboardProps) {
         <div className="cards-grid">
           <CardMRR
             titulo="SEO Brasil"
-            valor={mrrData.porCategoria.seoBrasil}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('SEO BRASIL')).length}
+            valor={mrrDataPersonalizado.porCategoria.seoBrasil}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('SEO BRASIL')).length}
           />
           <CardMRR
             titulo="SEO USA"
-            valor={mrrData.porCategoria.seoUsa}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('SEO EUA')).length}
+            valor={mrrDataPersonalizado.porCategoria.seoUsa}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('SEO EUA')).length}
           />
           <CardMRR
             titulo="SEO Geral"
-            valor={mrrData.porCategoria.seoGeral}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && (c.servicos.includes('SEO BRASIL') || c.servicos.includes('SEO EUA'))).length}
+            valor={mrrDataPersonalizado.porCategoria.seoGeral}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && (c.servicos.includes('SEO BRASIL') || c.servicos.includes('SEO EUA'))).length}
           />
           <CardMRR
             titulo="CRM"
-            valor={mrrData.porCategoria.crm}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('CRM')).length}
+            valor={mrrDataPersonalizado.porCategoria.crm}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('CRM')).length}
           />
           <CardMRR
             titulo="Assessoria"
-            valor={mrrData.porCategoria.assessoria}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('ASSESSORIA')).length}
+            valor={mrrDataPersonalizado.porCategoria.assessoria}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('ASSESSORIA')).length}
           />
           <CardMRR
             titulo="Social Mídia"
-            valor={mrrData.porCategoria.socialMedia}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('SOCIAL MÍDIA')).length}
+            valor={mrrDataPersonalizado.porCategoria.socialMedia}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('SOCIAL MÍDIA')).length}
           />
           <CardMRR
             titulo="IA"
-            valor={mrrData.porCategoria.ia}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('IA')).length}
+            valor={mrrDataPersonalizado.porCategoria.ia}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('IA')).length}
           />
           <CardMRR
             titulo="Waysales"
-            valor={mrrData.porCategoria.waysales}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('WAYSALES')).length}
+            valor={mrrDataPersonalizado.porCategoria.waysales}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('WAYSALES')).length}
           />
         </div>
       </div>
@@ -211,18 +212,18 @@ export function Dashboard({ clientes }: DashboardProps) {
         <div className="cards-grid">
           <CardMRR
             titulo="Tráfego Total"
-            valor={mrrData.porCategoria.trafegoPago}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPago}
             clientes={clientesFiltrados.filter(c => 
-              c.status === 'Ativo' && c.servicos.some(s => 
+              DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.some(s => 
                 s.includes('TRÁFEGO PAGO')
               )
             ).length}
           />
           <CardMRR
             titulo="Tráfego Brasil"
-            valor={mrrData.porCategoria.trafegoPagoBrasil}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoBrasil}
             clientes={clientesFiltrados.filter(c => 
-              c.status === 'Ativo' && (
+              DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && (
                 c.servicos.includes('TRÁFEGO PAGO E-COMMERCE BRASIL') || 
                 c.servicos.includes('TRÁFEGO PAGO LEADS BRASIL')
               )
@@ -230,19 +231,19 @@ export function Dashboard({ clientes }: DashboardProps) {
           />
           <CardMRR
             titulo="E-Commerce Brasil"
-            valor={mrrData.porCategoria.trafegoPagoBrasilE}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('TRÁFEGO PAGO E-COMMERCE BRASIL')).length}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoBrasilE}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('TRÁFEGO PAGO E-COMMERCE BRASIL')).length}
           />
           <CardMRR
             titulo="Leads Brasil"
-            valor={mrrData.porCategoria.trafegoPagoBrasilL}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('TRÁFEGO PAGO LEADS BRASIL')).length}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoBrasilL}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('TRÁFEGO PAGO LEADS BRASIL')).length}
           />
           <CardMRR
             titulo="Tráfego USA"
-            valor={mrrData.porCategoria.trafegoPagoUsaE + mrrData.porCategoria.trafegoPagoUsaL}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoUsaE + mrrDataPersonalizado.porCategoria.trafegoPagoUsaL}
             clientes={clientesFiltrados.filter(c => 
-              c.status === 'Ativo' && (
+              DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && (
                 c.servicos.includes('TRÁFEGO PAGO E-COMMERCE USA') || 
                 c.servicos.includes('TRÁFEGO PAGO LEADS USA')
               )
@@ -250,13 +251,13 @@ export function Dashboard({ clientes }: DashboardProps) {
           />
           <CardMRR
             titulo="E-Commerce USA"
-            valor={mrrData.porCategoria.trafegoPagoUsaE}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('TRÁFEGO PAGO E-COMMERCE USA')).length}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoUsaE}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('TRÁFEGO PAGO E-COMMERCE USA')).length}
           />
           <CardMRR
             titulo="Leads USA"
-            valor={mrrData.porCategoria.trafegoPagoUsaL}
-            clientes={clientesFiltrados.filter(c => c.status === 'Ativo' && c.servicos.includes('TRÁFEGO PAGO LEADS USA')).length}
+            valor={mrrDataPersonalizado.porCategoria.trafegoPagoUsaL}
+            clientes={clientesFiltrados.filter(c => DashboardManager.clienteAtivoNoPeriodo(c, dateRange) && c.servicos.includes('TRÁFEGO PAGO LEADS USA')).length}
           />
         </div>
       </div>
