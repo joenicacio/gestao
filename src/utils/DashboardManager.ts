@@ -29,6 +29,8 @@ export interface DateRangeFilter {
 }
 
 export class DashboardManager {
+  private static readonly MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
   static calcularMRR(clientes: Cliente[], squad?: 'BR' | 'USA' | 'TODOS'): MRRData {
     // Filtrar clientes por squad se especificado
     const clientesFiltrados = squad && squad !== 'TODOS' 
@@ -281,12 +283,14 @@ export class DashboardManager {
   }
 
   private static getUltimosMeses(quantidade: number): string[] {
-    const meses = []
+    const meses: string[] = []
+
     for (let i = quantidade - 1; i >= 0; i--) {
       const data = new Date()
       data.setMonth(data.getMonth() - i)
-      meses.push(data.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }))
+      meses.push(`${this.MESES_PT[data.getMonth()]}/${String(data.getFullYear()).slice(-2)}`)
     }
+
     return meses
   }
 
@@ -298,7 +302,7 @@ export class DashboardManager {
     const datAtual = new Date(inicio)
 
     while (datAtual <= fim) {
-      meses.push(datAtual.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }))
+      meses.push(`${this.MESES_PT[datAtual.getMonth()]}/${String(datAtual.getFullYear()).slice(-2)}`)
       datAtual.setMonth(datAtual.getMonth() + 1)
     }
 
@@ -306,8 +310,18 @@ export class DashboardManager {
   }
 
   private static parseMesFormatado(mesFormatado: string): { inicioDaMes: Date; fimDaMes: Date } {
-    const [mesStr, anoStr] = mesFormatado.split('/')
-    const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+    let [mesStr, anoStr] = mesFormatado.split('/')
+    if (!anoStr) {
+      const normalized = mesFormatado
+        .replace(/\./g, '')
+        .replace(/\s+de\s+/i, '/')
+        .replace(/\s+/g, '')
+      const parts = normalized.split('/')
+      mesStr = parts[0]
+      anoStr = parts[1]
+    }
+
+    const meses = this.MESES_PT
     const mesNum = meses.indexOf(mesStr.toLowerCase())
     const ano = parseInt('20' + anoStr, 10)
 
