@@ -1212,6 +1212,131 @@ body {
   gap: 1rem;
 }
 
+.historico-anual {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.historico-filtros {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filtro-ano {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.filtro-ano label {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.filtro-ano select {
+  border: 2px solid var(--gray-300);
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  background: white;
+}
+
+.info-comparacao {
+  background: white;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  color: var(--gray-700);
+  font-weight: 600;
+}
+
+.historico-table-wrapper {
+  overflow-x: auto;
+  background: white;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.historico-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.historico-table th,
+.historico-table td {
+  border: 1px solid var(--gray-200);
+  padding: 0.75rem 0.75rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.historico-table th {
+  background: var(--gray-50);
+  color: var(--gray-700);
+}
+
+.historico-graficos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.grafico-container {
+  background: white;
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.motivos-grids {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.motivos-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.motivos-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.motivos-card th,
+.motivos-card td {
+  border: 1px solid var(--gray-200);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.motivos-card th {
+  background: var(--gray-50);
+  color: var(--gray-700);
+}
+
+@media (max-width: 1200px) {
+  .historico-graficos {
+    grid-template-columns: 1fr;
+  }
+
+  .motivos-grids {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ==================== RESPONSIVO DASHBOARD ==================== */
 
 @media (max-width: 1200px) {

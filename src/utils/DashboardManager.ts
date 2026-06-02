@@ -28,6 +28,20 @@ export interface DateRangeFilter {
   dataFim?: Date
 }
 
+export interface HistoricoMensalAno {
+  mes: string
+  ativos: number
+  churn: number
+  receitaAtivos: number
+  receitaChurn: number
+}
+
+export interface MotivoChurnResumo {
+  motivo: string
+  count: number
+  percentual: number
+}
+
 export class DashboardManager {
   private static readonly MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
@@ -202,6 +216,79 @@ export class DashboardManager {
       },
       clientesPorServico
     }
+  }
+
+  static getMesesDoAno(ano: number): string[] {
+    return this.MESES_PT.map((mes) => `${mes}/${String(ano).slice(-2)}`)
+  }
+
+  static calcularHistoricoMensalPorAno(
+    clientes: Cliente[],
+    ano: number,
+    squad?: 'BR' | 'USA' | 'TODOS'
+  ): HistoricoMensalAno[] {
+    let clientesFiltrados = squad && squad !== 'TODOS'
+      ? clientes.filter(c => c.squad === squad)
+      : clientes
+
+    const meses = this.getMesesDoAno(ano)
+
+    return meses.map(mes => {
+      const ativos = clientesFiltrados.filter(cliente =>
+        this.clienteEstavaAtivoNoMes(cliente, mes) && !this.clienteChurnNoMes(cliente, mes)
+      ).length
+
+      const churn = clientesFiltrados.filter(cliente =>
+        this.clienteChurnNoMes(cliente, mes)
+      ).length
+
+      const receitaAtivos = clientesFiltrados
+        .filter(cliente => this.clienteEstavaAtivoNoMes(cliente, mes) && !this.clienteChurnNoMes(cliente, mes))
+        .reduce((sum, cliente) => sum + cliente.fee, 0)
+
+      const receitaChurn = clientesFiltrados
+        .filter(cliente => this.clienteChurnNoMes(cliente, mes))
+        .reduce((sum, cliente) => sum + cliente.fee, 0)
+
+      return {
+        mes,
+        ativos,
+        churn,
+        receitaAtivos,
+        receitaChurn
+      }
+    })
+  }
+
+  static calcularMotivosChurnPorAno(
+    clientes: Cliente[],
+    ano: number,
+    squad?: 'BR' | 'USA' | 'TODOS'
+  ): MotivoChurnResumo[] {
+    let clientesFiltrados = squad && squad !== 'TODOS'
+      ? clientes.filter(c => c.squad === squad)
+      : clientes
+
+    const clientesChurn = clientesFiltrados.filter(cliente =>
+      cliente.dataChurn ? new Date(cliente.dataChurn).getFullYear() === ano : false
+    )
+
+    const motivos = clientesChurn.reduce((acc, cliente) => {
+      const motivo = cliente.motivoChurn?.motivoPrincipal?.trim() || 'Não informado'
+      const current = acc.get(motivo) || 0
+      acc.set(motivo, current + 1)
+      return acc
+    }, new Map<string, number>())
+
+    const total = clientesChurn.length
+
+    return Array.from(motivos.entries())
+      .map(([motivo, count]) => ({
+        motivo,
+        count,
+        percentual: total > 0 ? (count / total) * 100 : 0
+      }))
+      .sort((a, b) => b.count - a.count)
   }
 
   static contaClientesAtivosNoPeriodo(clientes: Cliente[], dateRange?: DateRangeFilter): number {

@@ -8,8 +8,9 @@ import { ApiClient } from './utils/ApiClient'
 import { FormularioCliente } from './components/FormularioCliente'
 import { ListaClientes } from './components/ListaClientes'
 import { Dashboard } from './components/Dashboard'
+import { HistoricoAnual } from './components/HistoricoAnual'
 
-type Pagina = 'clientes' | 'dashboard'
+type Pagina = 'clientes' | 'dashboard' | 'historico'
 
 function App() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -194,6 +195,13 @@ function App() {
               <FiBarChart2 size={20} />
               <span>Dashboard</span>
             </button>
+            <button
+              className={`nav-btn ${paginaAtual === 'historico' ? 'active' : ''}`}
+              onClick={() => setPaginaAtual('historico')}
+            >
+              <FiBarChart2 size={20} />
+              <span>Histórico</span>
+            </button>
           </nav>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {wsConectado ? (
@@ -229,6 +237,7 @@ function App() {
           />
         )}
         {!isLoading && paginaAtual === 'dashboard' && <Dashboard clientes={clientes} />}
+        {!isLoading && paginaAtual === 'historico' && <HistoricoAnual clientes={clientes} />}
       </main>
 
       {showFormulario && (
