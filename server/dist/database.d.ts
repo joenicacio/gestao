@@ -1,4 +1,9 @@
 import { Pool } from 'pg';
+export interface MotivoChurn {
+    motivoPrincipal: string;
+    submotivo: string;
+    porques: [string, string, string, string, string];
+}
 export interface Cliente {
     id: string;
     nome: string;
@@ -11,6 +16,10 @@ export interface Cliente {
     dataInicio?: string;
     dataChurn?: string;
     historico: HistoricoItem[];
+    motivoChurn?: MotivoChurn;
+    tempoContrato?: number;
+    ultimoFee?: number;
+    ultimoServicosCount?: number;
 }
 export interface HistoricoItem {
     id: string;
@@ -20,6 +29,18 @@ export interface HistoricoItem {
     descricao: string;
     dadosAntigos?: any;
     dadosNovos?: any;
+}
+export interface SnapshotMensal {
+    clienteId: string;
+    mes: string;
+    nome: string;
+    squad: 'BR' | 'USA';
+    servicos: string[];
+    fee: number;
+    status: 'Ativo' | 'Churn';
+    qtdServicos: number;
+    pesoOperacional: number;
+    updatedAt?: string;
 }
 export declare class Database {
     private static instance;
@@ -65,6 +86,27 @@ export declare class Database {
      * Fechar pool de conexões (ao desligar o servidor)
      */
     close(): Promise<void>;
+    /**
+     * Cria ou substitui o snapshot de um cliente para um mês específico
+     */
+    upsertSnapshot(snapshot: SnapshotMensal): Promise<SnapshotMensal>;
+    /**
+     * Obtém os snapshots de todos os clientes para um mês específico
+     */
+    getSnapshotsPorMes(mes: string): Promise<SnapshotMensal[]>;
+    /**
+     * Obtém os snapshots de todos os clientes num intervalo de meses (inclusive)
+     */
+    getSnapshotsRange(mesInicio: string, mesFim: string): Promise<SnapshotMensal[]>;
+    /**
+     * Obtém o histórico de snapshots de um cliente específico
+     */
+    getSnapshotsPorCliente(clienteId: string): Promise<SnapshotMensal[]>;
+    /**
+     * Obtém os meses (distintos) que já possuem ao menos um snapshot
+     */
+    getMesesComSnapshot(): Promise<string[]>;
+    private rowToSnapshot;
     private rowToCliente;
     private rowsToClientes;
     /**

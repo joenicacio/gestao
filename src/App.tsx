@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { FiUsers, FiBarChart2, FiPlus, FiWifi, FiWifiOff } from 'react-icons/fi'
 import './App.css'
-import { Cliente } from './types'
+import { Cliente, SnapshotMensal } from './types'
 import { ClienteManager } from './utils/ClienteManager'
+import { SnapshotManager } from './utils/SnapshotManager'
 import { WebSocketManager } from './utils/WebSocketManager'
 import { ApiClient } from './utils/ApiClient'
 import { FormularioCliente } from './components/FormularioCliente'
@@ -14,6 +15,7 @@ type Pagina = 'clientes' | 'dashboard' | 'historico'
 
 function App() {
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [snapshots, setSnapshots] = useState<SnapshotMensal[]>([])
   const [showFormulario, setShowFormulario] = useState(false)
   const [paginaAtual, setPaginaAtual] = useState<Pagina>('clientes')
   const [isOnline, setIsOnline] = useState(true)
@@ -41,6 +43,25 @@ function App() {
     }
 
     carregarClientes()
+  }, [])
+
+  // Carregar snapshots mensais (estado congelado mês a mês) para os dashboards
+  useEffect(() => {
+    const carregarSnapshots = async () => {
+      const hoje = new Date()
+      const mesFim = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+      const inicio = new Date(hoje.getFullYear() - 2, hoje.getMonth(), 1)
+      const mesInicio = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}`
+
+      try {
+        const dados = await SnapshotManager.getSnapshotsRange(mesInicio, mesFim)
+        setSnapshots(dados)
+      } catch (error) {
+        console.error('Erro ao carregar snapshots mensais:', error)
+      }
+    }
+
+    carregarSnapshots()
   }, [])
 
   // Conectar ao WebSocket e configurar listeners em tempo real
@@ -236,8 +257,8 @@ function App() {
             onUpdate={handleAtualizarCliente}
           />
         )}
-        {!isLoading && paginaAtual === 'dashboard' && <Dashboard clientes={clientes} />}
-        {!isLoading && paginaAtual === 'historico' && <HistoricoAnual clientes={clientes} />}
+        {!isLoading && paginaAtual === 'dashboard' && <Dashboard clientes={clientes} snapshots={snapshots} />}
+        {!isLoading && paginaAtual === 'historico' && <HistoricoAnual clientes={clientes} snapshots={snapshots} />}
       </main>
 
       {showFormulario && (

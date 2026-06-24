@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Cliente } from '../types'
+import { Cliente, SnapshotMensal } from '../types'
 import { DashboardManager, DateRangeFilter } from '../utils/DashboardManager'
 import { MetasChurn } from './MetasChurn'
 import { CardMRR } from './CardMRR'
@@ -8,9 +8,10 @@ import { GraficoFee } from './GraficoFee'
 
 interface DashboardProps {
   clientes: Cliente[]
+  snapshots?: SnapshotMensal[]
 }
 
-export function Dashboard({ clientes }: DashboardProps) {
+export function Dashboard({ clientes, snapshots = [] }: DashboardProps) {
   const [metaChurn, setMetaChurn] = useState<number>(DashboardManager.obterMetaChurn())
   const [squadFilter, setSquadFilter] = useState<'BR' | 'USA' | 'TODOS'>('TODOS')
   const [dataInicio, setDataInicio] = useState<string>('')
@@ -28,8 +29,29 @@ export function Dashboard({ clientes }: DashboardProps) {
   }
 
   const mrrData = useMemo(() => DashboardManager.calcularMRR(clientes, squadFilter), [clientes, squadFilter])
-  const churnMensal = useMemo(() => DashboardManager.calcularChurnMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
-  const feeMensal = useMemo(() => DashboardManager.calcularFeeMensalPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
+
+  // Meses do período em formato YYYY-MM, usados para casar com os snapshots mensais
+  const mesesYYYYMM = useMemo(
+    () => dateRange?.dataInicio || dateRange?.dataFim
+      ? DashboardManager.getMesesPersonalizadosYYYYMM(dateRange?.dataInicio, dateRange?.dataFim)
+      : DashboardManager.getUltimosMesesYYYYMM(6),
+    [dateRange]
+  )
+
+  // Mês a mês: usa o estado congelado (snapshot) quando disponível; cai no cálculo
+  // ao vivo (estado atual do cliente) só para meses ainda sem snapshot capturado.
+  const churnMensal = useMemo(() => {
+    const aoVivo = DashboardManager.calcularChurnMensalPersonalizado(clientes, squadFilter, dateRange)
+    const deSnapshot = DashboardManager.calcularChurnMensalDeSnapshots(snapshots, mesesYYYYMM, squadFilter)
+    return DashboardManager.mesclarComFallback(mesesYYYYMM, deSnapshot, aoVivo, snapshots)
+  }, [clientes, snapshots, squadFilter, dateRange, mesesYYYYMM])
+
+  const feeMensal = useMemo(() => {
+    const aoVivo = DashboardManager.calcularFeeMensalPersonalizado(clientes, squadFilter, dateRange)
+    const deSnapshot = DashboardManager.calcularFeeMensalDeSnapshots(snapshots, mesesYYYYMM, squadFilter)
+    return DashboardManager.mesclarComFallback(mesesYYYYMM, deSnapshot, aoVivo, snapshots)
+  }, [clientes, snapshots, squadFilter, dateRange, mesesYYYYMM])
+
   const mrrDataPersonalizado = useMemo(() => DashboardManager.calcularMRRPersonalizado(clientes, squadFilter, dateRange), [clientes, squadFilter, dateRange])
 
   const handleSalvarMeta = (novaMeta: number) => {

@@ -1,4 +1,4 @@
-import { Cliente, ServicoType } from '../types'
+import { Cliente, ServicoType, SnapshotMensal } from '../types'
 
 export interface MRRData {
   total: number
@@ -533,5 +533,121 @@ export class DashboardManager {
   static obterMetaChurn(): number {
     const meta = localStorage.getItem('meta_churn')
     return meta ? parseFloat(meta) : 0
+  }
+
+  // ==================== AGREGAÇÃO A PARTIR DE SNAPSHOTS MENSAIS ====================
+  // Estas funções usam o estado "congelado" de cada mês (snapshots_mensais), em vez de
+  // reconstruir o passado a partir dos dados atuais do cliente. Isso evita que uma
+  // alteração de fee/serviços hoje distorça os números de meses anteriores.
+
+  static mesYYYYMMToDisplay(mesYYYYMM: string): string {
+    const [anoStr, mesStr] = mesYYYYMM.split('-')
+    const mesIndex = parseInt(mesStr, 10) - 1
+    return `${this.MESES_PT[mesIndex]}/${anoStr.slice(-2)}`
+  }
+
+  static getUltimosMesesYYYYMM(quantidade: number): string[] {
+    const meses: string[] = []
+    for (let i = quantidade - 1; i >= 0; i--) {
+      const data = new Date()
+      data.setMonth(data.getMonth() - i)
+      meses.push(`${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`)
+    }
+    return meses
+  }
+
+  static getMesesDoAnoYYYYMM(ano: number): string[] {
+    return Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`)
+  }
+
+  static getMesesPersonalizadosYYYYMM(dataInicio?: Date, dataFim?: Date): string[] {
+    const inicio = dataInicio || new Date((new Date()).getFullYear() - 1, 0, 1)
+    const fim = dataFim || new Date()
+
+    const meses: string[] = []
+    const datAtual = new Date(inicio)
+
+    while (datAtual <= fim) {
+      meses.push(`${datAtual.getFullYear()}-${String(datAtual.getMonth() + 1).padStart(2, '0')}`)
+      datAtual.setMonth(datAtual.getMonth() + 1)
+    }
+
+    return meses
+  }
+
+  private static filtrarSnapshotsPorSquad(snapshots: SnapshotMensal[], squad?: 'BR' | 'USA' | 'TODOS'): SnapshotMensal[] {
+    return squad && squad !== 'TODOS' ? snapshots.filter(s => s.squad === squad) : snapshots
+  }
+
+  static calcularFeeMensalDeSnapshots(
+    snapshots: SnapshotMensal[],
+    mesesYYYYMM: string[],
+    squad?: 'BR' | 'USA' | 'TODOS'
+  ): { mes: string; fee: number }[] {
+    const filtrados = this.filtrarSnapshotsPorSquad(snapshots, squad)
+
+    return mesesYYYYMM.map(mesYYYYMM => {
+      const fee = filtrados
+        .filter(s => s.mes === mesYYYYMM && s.status === 'Ativo')
+        .reduce((sum, s) => sum + s.fee, 0)
+
+      return { mes: this.mesYYYYMMToDisplay(mesYYYYMM), fee }
+    })
+  }
+
+  static calcularChurnMensalDeSnapshots(
+    snapshots: SnapshotMensal[],
+    mesesYYYYMM: string[],
+    squad?: 'BR' | 'USA' | 'TODOS'
+  ): { mes: string; churn: number; ativo: number }[] {
+    const filtrados = this.filtrarSnapshotsPorSquad(snapshots, squad)
+
+    return mesesYYYYMM.map(mesYYYYMM => {
+      const doMes = filtrados.filter(s => s.mes === mesYYYYMM)
+      const ativo = doMes.filter(s => s.status === 'Ativo').length
+      const churn = doMes.filter(s => s.status === 'Churn').length
+
+      return { mes: this.mesYYYYMMToDisplay(mesYYYYMM), churn, ativo }
+    })
+  }
+
+  static calcularHistoricoMensalPorAnoDeSnapshots(
+    snapshots: SnapshotMensal[],
+    ano: number,
+    squad?: 'BR' | 'USA' | 'TODOS'
+  ): HistoricoMensalAno[] {
+    const filtrados = this.filtrarSnapshotsPorSquad(snapshots, squad)
+    const meses = this.getMesesDoAnoYYYYMM(ano)
+
+    return meses.map(mesYYYYMM => {
+      const doMes = filtrados.filter(s => s.mes === mesYYYYMM)
+      const ativos = doMes.filter(s => s.status === 'Ativo')
+      const churn = doMes.filter(s => s.status === 'Churn')
+
+      return {
+        mes: this.mesYYYYMMToDisplay(mesYYYYMM),
+        ativos: ativos.length,
+        churn: churn.length,
+        receitaAtivos: ativos.reduce((sum, s) => sum + s.fee, 0),
+        receitaChurn: churn.reduce((sum, s) => sum + s.fee, 0)
+      }
+    })
+  }
+
+  /**
+   * Mescla dados mês a mês: usa o valor vindo de snapshots quando o mês já tem
+   * captura registrada, e cai de volta no valor calculado ao vivo (a partir do
+   * estado atual dos clientes) apenas para os meses ainda sem snapshot.
+   */
+  static mesclarComFallback<T extends { mes: string }>(
+    mesesYYYYMM: string[],
+    doSnapshot: T[],
+    doFallback: T[],
+    snapshots: SnapshotMensal[]
+  ): T[] {
+    return mesesYYYYMM.map((mesYYYYMM, index) => {
+      const temSnapshot = snapshots.some(s => s.mes === mesYYYYMM)
+      return temSnapshot ? doSnapshot[index] : doFallback[index]
+    })
   }
 }

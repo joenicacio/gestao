@@ -64,3 +64,16 @@ export interface VariacaoInfo {
   percentual: number
   diferenca: number
 }
+
+export interface SnapshotMensal {
+  clienteId: string
+  mes: string // formato 'YYYY-MM'
+  nome: string
+  squad: Squad
+  servicos: ServicoType[]
+  fee: number
+  status: Status
+  qtdServicos: number
+  pesoOperacional: number
+  updatedAt?: string
+}

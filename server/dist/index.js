@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { Database } from './database.js';
@@ -28,6 +29,39 @@ app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
     next();
 });
+// ==================== SNAPSHOTS MENSAIS (helpers) ====================
+function mesAtual() {
+    const agora = new Date();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    return `${agora.getFullYear()}-${mes}`;
+}
+function buildSnapshotFromCliente(cliente, mes) {
+    const qtdServicos = cliente.servicos.length;
+    return {
+        clienteId: cliente.id,
+        mes,
+        nome: cliente.nome,
+        squad: cliente.squad,
+        servicos: cliente.servicos,
+        fee: cliente.fee,
+        status: cliente.status,
+        qtdServicos,
+        pesoOperacional: qtdServicos
+    };
+}
+/**
+ * Garante que todo cliente Ativo tenha um snapshot do mês atual.
+ * Usado pela captura manual (/api/snapshots/capturar) e pelo cron diário.
+ */
+async function capturarSnapshotsMesAtual() {
+    const mes = mesAtual();
+    const clientes = await db.getAllClientes();
+    const ativos = clientes.filter(c => c.status === 'Ativo');
+    for (const cliente of ativos) {
+        await db.upsertSnapshot(buildSnapshotFromCliente(cliente, mes));
+    }
+    return ativos.length;
+}
 // ==================== ROUTES ====================
 // GET /api/clientes - Obter todos os clientes
 app.get('/api/clientes', async (req, res) => {
@@ -58,7 +92,7 @@ app.get('/api/clientes/:id', async (req, res) => {
 // POST /api/clientes - Criar novo cliente
 app.post('/api/clientes', async (req, res) => {
     try {
-        const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio, dataChurn, historico } = req.body;
+        const { nome, squad, servicos, fee, status, dataCreate, dataUpdate, dataInicio, dataChurn, historico, motivoChurn, tempoContrato, ultimoFee, ultimoServicosCount } = req.body;
         if (!nome || !squad || !servicos || fee === undefined || !status) {
             return res.status(400).json({
                 success: false,
@@ -76,9 +110,15 @@ app.post('/api/clientes', async (req, res) => {
             dataUpdate,
             dataInicio,
             dataChurn,
-            historico
+            historico,
+            motivoChurn,
+            tempoContrato,
+            ultimoFee,
+            ultimoServicosCount
         };
         const clienteCriado = await db.createCliente(novoCliente);
+        // Capturar snapshot do mês atual (estado congelado para os dashboards)
+        await db.upsertSnapshot(buildSnapshotFromCliente(clienteCriado, mesAtual()));
         // Notificar todos os clientes conectados sobre a novo cliente
         io.emit('cliente:created', clienteCriado);
         res.status(201).json({ success: true, data: clienteCriado });
@@ -98,6 +138,10 @@ app.put('/api/clientes/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Cliente não encontrado' });
         }
         const atualizado = await db.updateCliente(id, clienteAtualizado);
+        // Capturar snapshot do mês atual (estado congelado para os dashboards)
+        if (atualizado) {
+            await db.upsertSnapshot(buildSnapshotFromCliente(atualizado, mesAtual()));
+        }
         // Notificar todos os clientes conectados sobre a atualização
         io.emit('cliente:updated', atualizado);
         res.json({ success: true, data: atualizado });
@@ -136,12 +180,14 @@ app.post('/api/clientes/batch/sync', async (req, res) => {
             });
         }
         const clientesSincronizados = [];
+        const mes = mesAtual();
         for (const cliente of clientes) {
             if (cliente.id) {
                 // Atualizar cliente existente
                 const atualizado = await db.updateCliente(cliente.id, cliente);
                 if (atualizado) {
                     clientesSincronizados.push(atualizado);
+                    await db.upsertSnapshot(buildSnapshotFromCliente(atualizado, mes));
                 }
             }
             else {
@@ -151,6 +197,7 @@ app.post('/api/clientes/batch/sync', async (req, res) => {
                     id: `cli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
                 });
                 clientesSincronizados.push(criado);
+                await db.upsertSnapshot(buildSnapshotFromCliente(criado, mes));
             }
         }
         res.json({ success: true, data: clientesSincronizados });
@@ -158,6 +205,82 @@ app.post('/api/clientes/batch/sync', async (req, res) => {
     catch (error) {
         console.error('Erro ao sincronizar clientes:', error);
         res.status(500).json({ success: false, error: 'Erro ao sincronizar clientes' });
+    }
+});
+// POST /api/snapshots/capturar - Captura manual do estado atual de todos os clientes ativos
+app.post('/api/snapshots/capturar', async (req, res) => {
+    try {
+        const quantidade = await capturarSnapshotsMesAtual();
+        res.json({ success: true, mes: mesAtual(), clientesCapturados: quantidade });
+    }
+    catch (error) {
+        console.error('Erro ao capturar snapshots:', error);
+        res.status(500).json({ success: false, error: 'Erro ao capturar snapshots' });
+    }
+});
+// GET /api/snapshots?mesInicio=YYYY-MM&mesFim=YYYY-MM - Dados congelados para os dashboards
+app.get('/api/snapshots', async (req, res) => {
+    try {
+        const { mesInicio, mesFim, mes } = req.query;
+        if (mes && typeof mes === 'string') {
+            const snapshots = await db.getSnapshotsPorMes(mes);
+            return res.json({ success: true, data: snapshots });
+        }
+        if (!mesInicio || !mesFim || typeof mesInicio !== 'string' || typeof mesFim !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Informe "mes" ou o par "mesInicio"/"mesFim" (formato YYYY-MM)'
+            });
+        }
+        const snapshots = await db.getSnapshotsRange(mesInicio, mesFim);
+        res.json({ success: true, data: snapshots });
+    }
+    catch (error) {
+        console.error('Erro ao obter snapshots:', error);
+        res.status(500).json({ success: false, error: 'Erro ao obter snapshots' });
+    }
+});
+// GET /api/snapshots/cliente/:id - Histórico de snapshots de um cliente
+app.get('/api/snapshots/cliente/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const snapshots = await db.getSnapshotsPorCliente(id);
+        res.json({ success: true, data: snapshots });
+    }
+    catch (error) {
+        console.error('Erro ao obter snapshots do cliente:', error);
+        res.status(500).json({ success: false, error: 'Erro ao obter snapshots do cliente' });
+    }
+});
+// PUT /api/snapshots/:clienteId/:mes - Correção retroativa explícita de um mês
+app.put('/api/snapshots/:clienteId/:mes', async (req, res) => {
+    try {
+        const { clienteId, mes } = req.params;
+        if (!/^\d{4}-\d{2}$/.test(mes)) {
+            return res.status(400).json({ success: false, error: 'Formato de mês inválido, use YYYY-MM' });
+        }
+        const cliente = await db.getClienteById(clienteId);
+        if (!cliente) {
+            return res.status(404).json({ success: false, error: 'Cliente não encontrado' });
+        }
+        const { servicos, fee, status, squad, nome } = req.body;
+        const snapshot = {
+            clienteId,
+            mes,
+            nome: nome ?? cliente.nome,
+            squad: squad ?? cliente.squad,
+            servicos: servicos ?? cliente.servicos,
+            fee: fee ?? cliente.fee,
+            status: status ?? cliente.status,
+            qtdServicos: (servicos ?? cliente.servicos).length,
+            pesoOperacional: (servicos ?? cliente.servicos).length
+        };
+        const salvo = await db.upsertSnapshot(snapshot);
+        res.json({ success: true, data: salvo });
+    }
+    catch (error) {
+        console.error('Erro ao corrigir snapshot do mês:', error);
+        res.status(500).json({ success: false, error: 'Erro ao corrigir snapshot do mês' });
     }
 });
 // Health check
@@ -190,6 +313,16 @@ async function startServer() {
             console.log(`🔗 CORS habilitado para: ${CORS_ORIGIN}`);
             console.log(`🗄️  Database: PostgreSQL Neon`);
             console.log(`🔌 WebSocket (Socket.io) habilitado`);
+        });
+        // Garante que todo cliente Ativo tenha snapshot do mês atual, mesmo sem edições no dia
+        cron.schedule('10 0 * * *', async () => {
+            try {
+                const quantidade = await capturarSnapshotsMesAtual();
+                console.log(`🗂️  Snapshot diário capturado para ${quantidade} clientes (${mesAtual()})`);
+            }
+            catch (error) {
+                console.error('Erro no snapshot diário agendado:', error);
+            }
         });
         // Graceful shutdown
         process.on('SIGINT', async () => {

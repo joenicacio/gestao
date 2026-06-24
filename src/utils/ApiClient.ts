@@ -83,4 +83,19 @@ export class ApiClient {
   static async healthCheck() {
     return this.request('/health')
   }
+
+  static async getSnapshotsRange(mesInicio: string, mesFim: string) {
+    return this.request(`/api/snapshots?mesInicio=${mesInicio}&mesFim=${mesFim}`)
+  }
+
+  static async capturarSnapshots() {
+    return this.request('/api/snapshots/capturar', { method: 'POST' })
+  }
+
+  static async corrigirSnapshot(clienteId: string, mes: string, dados: any) {
+    return this.request(`/api/snapshots/${clienteId}/${mes}`, {
+      method: 'PUT',
+      body: JSON.stringify(dados),
+    })
+  }
 }

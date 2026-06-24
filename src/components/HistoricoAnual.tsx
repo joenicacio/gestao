@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Cliente } from '../types'
+import { Cliente, SnapshotMensal } from '../types'
 import { DashboardManager } from '../utils/DashboardManager'
 
 interface HistoricoAnualProps {
   clientes: Cliente[]
+  snapshots?: SnapshotMensal[]
 }
 
 interface HistoricoAnoItem {
@@ -29,7 +30,7 @@ const formatCurrency = (value: number) =>
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`
 
-export function HistoricoAnual({ clientes }: HistoricoAnualProps) {
+export function HistoricoAnual({ clientes, snapshots = [] }: HistoricoAnualProps) {
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>()
     const adicionarAno = (valor?: string) => {
@@ -58,15 +59,21 @@ export function HistoricoAnual({ clientes }: HistoricoAnualProps) {
   const [selectedYear, setSelectedYear] = useState<number>(anosDisponiveis[0] || new Date().getFullYear())
   const previousYear = selectedYear - 1
 
-  const historicoAtual = useMemo<HistoricoAnoItem[]>(() =>
-    DashboardManager.calcularHistoricoMensalPorAno(clientes, selectedYear),
-    [clientes, selectedYear]
-  )
+  // Usa o estado congelado por mês (snapshot) quando existir captura para aquele
+  // mês; cai no cálculo ao vivo (dados atuais do cliente) só onde ainda não há snapshot.
+  const historicoAtual = useMemo<HistoricoAnoItem[]>(() => {
+    const aoVivo = DashboardManager.calcularHistoricoMensalPorAno(clientes, selectedYear)
+    const deSnapshot = DashboardManager.calcularHistoricoMensalPorAnoDeSnapshots(snapshots, selectedYear)
+    const mesesYYYYMM = DashboardManager.getMesesDoAnoYYYYMM(selectedYear)
+    return DashboardManager.mesclarComFallback(mesesYYYYMM, deSnapshot, aoVivo, snapshots)
+  }, [clientes, snapshots, selectedYear])
 
-  const historicoAnterior = useMemo<HistoricoAnoItem[]>(() =>
-    DashboardManager.calcularHistoricoMensalPorAno(clientes, previousYear),
-    [clientes, previousYear]
-  )
+  const historicoAnterior = useMemo<HistoricoAnoItem[]>(() => {
+    const aoVivo = DashboardManager.calcularHistoricoMensalPorAno(clientes, previousYear)
+    const deSnapshot = DashboardManager.calcularHistoricoMensalPorAnoDeSnapshots(snapshots, previousYear)
+    const mesesYYYYMM = DashboardManager.getMesesDoAnoYYYYMM(previousYear)
+    return DashboardManager.mesclarComFallback(mesesYYYYMM, deSnapshot, aoVivo, snapshots)
+  }, [clientes, snapshots, previousYear])
 
   const motivosAtual = useMemo<MotivoResumo[]>(() =>
     DashboardManager.calcularMotivosChurnPorAno(clientes, selectedYear),
